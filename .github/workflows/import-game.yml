@@ -1,0 +1,51 @@
+name: Import Rivetwake game files
+on:
+  push:
+    paths:
+      - '.github/workflows/import-game.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import-game:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download game archive from owner's existing repository
+        run: |
+          curl --fail --location --retry 3 \
+            https://raw.githubusercontent.com/nathanstv2310-oss/fake-poxel/main/Rivetwake.zip \
+            --output /tmp/Rivetwake.zip
+          unzip -t /tmp/Rivetwake.zip
+      - name: Extract game files
+        run: |
+          mkdir -p /tmp/rivetwake-unpacked
+          unzip -oq /tmp/Rivetwake.zip -d /tmp/rivetwake-unpacked
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          root=Path('/tmp/rivetwake-unpacked')
+          candidates=[p.parent for p in root.rglob('package.json') if (p.parent/'dist').is_dir() and (p.parent/'server').is_dir()]
+          if len(candidates)!=1:
+              raise SystemExit(f'Expected one game project with package.json, dist/, server/; found {len(candidates)}')
+          source=candidates[0]
+          dest=Path.cwd()
+          for item in source.iterdir():
+              if item.name=='.git' or item.name=='.github':
+                  continue
+              target=dest/item.name
+              if item.is_dir():
+                  shutil.copytree(item,target,dirs_exist_ok=True)
+              else:
+                  shutil.copy2(item,target)
+          print('Imported game from',source)
+          PY
+      - name: Commit extracted game to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Import complete Rivetwake game"
+            git push
+          fi
