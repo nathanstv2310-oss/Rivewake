@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#10191d"><meta name="description" content="Play Rivetwake, an original blocky arena FPS. Fight bots at Sunspoke Depot or join a real-time multiplayer room."><title>Rivetwake · Arena FPS</title><link rel="icon" href="./mark.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"><script src="./config.js"></script></head>
+<body>
+<svg class="svg-bank" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+ <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z" fill="currentColor" stroke="none"/></symbol>
+ <symbol id="i-aim" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 1v6m0 10v6M1 12h6m10 0h6"/><circle cx="12" cy="12" r="1"/></symbol>
+ <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M2 20v-2c0-4 3-6 7-6s7 2 7 6v2M16 5a3 3 0 0 1 0 6m2 3c3 1 4 3 4 6"/></symbol>
+ <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></symbol>
+ <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M3 12h17m-7-7 7 7-7 7"/></symbol>
+ <symbol id="i-volume" viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3zM16 8q4 4 0 8m3-11q7 7 0 14"/></symbol>
+ <symbol id="i-muted" viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3zM16 9l6 6m0-6-6 6"/></symbol>
+ <symbol id="i-guide" viewBox="0 0 24 24"><path d="M3 4h7l2 2 2-2h7v15h-7l-2 2-2-2H3zm9 2v15"/></symbol>
+ <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M3 6h5m4 0h9M3 12h11m4 0h3M3 18h3m4 0h11"/><circle cx="10" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></symbol>
+ <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M12 7V3m-4 9h2m4 0h2m-8 4h8M1 11v5m22-5v5"/></symbol>
+ <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 19v-3m5 3v-7m5 7V8m5 11V4" stroke-width="3"/></symbol>
+ <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="3"/></symbol>
+ <symbol id="i-stack" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4zM3 12l9 4 9-4M3 17l9 4 9-4"/></symbol>
+ <symbol id="i-cross" viewBox="0 0 24 24"><path d="m6 6 12 12m0-12L6 18"/></symbol>
+ <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+ <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="1"/><path d="M16 5V3H3v13h2"/></symbol>
+ <symbol id="i-check" viewBox="0 0 24 24"><path d="m3 12 6 6L21 5"/></symbol>
+</defs></svg>
+<header id="header"><div class="header-in"><a class="brand" href="./" aria-label="Rivetwake home"><img src="./mark.svg" alt=""><span>RIVETWAKE</span></a><div class="header-rule"></div>
+ <nav aria-label="Main menu"><button class="nav active" data-act="home"><svg><use href="#i-play"/></svg>Play</button><button class="nav" data-act="guide"><svg><use href="#i-guide"/></svg>How to play</button><button class="nav" data-act="settings"><svg><use href="#i-sliders"/></svg>Settings</button></nav>
+ <div class="header-end"><span class="client-led"><i class="led"></i><span id="system-status">Loading client</span></span><button class="icon-btn" id="mute-btn" data-act="mute" aria-label="Mute audio" title="Mute audio"><svg><use href="#i-volume"/></svg></button></div></div></header>
+<main id="home"><div class="page-title"><div><div class="overline"><span class="accent-line"></span> OPERATIONS <em>/</em> MATCH SELECT</div><h1>Deployment deck<span class="period">.</span></h1></div><div class="page-code"><b>RW</b><span>ARENA CLIENT<br><strong>BUILD 01.00</strong></span></div></div>
+ <div class="deck"><section class="arena-card" aria-label="Sunspoke Depot arena preview"><div id="menu-world"><canvas id="world" aria-label="3D arena"></canvas></div><div class="arena-shade"></div><div class="feed-label"><i class="led"></i> ARENA CAM <em>/</em> 01</div><div class="frame-corner"></div><div class="map-caption"><div class="map-kicker"><i></i> FEATURED ARENA</div><h2>Sunspoke Depot</h2><div class="map-tags"><span><svg><use href="#i-aim"/></svg> Free-for-all</span><span><svg><use href="#i-clock"/></svg> 5 minutes</span><span><svg><use href="#i-users"/></svg> 2–8 fighters</span></div></div></section>
+ <section class="console panel"><div class="module-line"><div class="overline"><span class="status-square"></span> LAUNCH TERMINAL</div><span class="slashes" aria-hidden="true">///</span></div><h2>Match setup</h2><div class="mode-tabs" aria-label="Game mode"><button class="selected" data-act="mode" data-mode="offline" aria-pressed="true"><svg><use href="#i-bot"/></svg>Offline</button><button data-act="mode" data-mode="online" aria-pressed="false"><svg><use href="#i-signal"/></svg>Multiplayer</button></div>
+ <label class="field" for="nickname">CALLSIGN</label><input id="nickname" maxlength="16" autocomplete="nickname" placeholder="Enter nickname" value="Pilot">
+ <div id="offline-options"><label class="field" id="difficulty-label">BOT DIFFICULTY</label><div class="seg" id="difficulty" role="group" aria-labelledby="difficulty-label"><button data-act="difficulty" data-n="0">Rookie</button><button data-act="difficulty" data-n="1" class="selected">Regular</button><button data-act="difficulty" data-n="2">Veteran</button></div><div class="launch-meta"><span>LOCAL MATCH</span><span>YOU + 5 BOTS</span></div><button class="primary launch" data-act="offline"><svg><use href="#i-play"/></svg> Play offline <svg class="push"><use href="#i-arrow"/></svg></button></div>
+ <div id="online-options" hidden><div class="online-actions"><button class="secondary" data-act="create-dialog">Create Room</button><button class="secondary" data-act="join-dialog">Join Room</button></div><div class="launch-meta"><span>PUBLIC LOBBIES</span><span>UP TO 8 PLAYERS</span></div><button class="primary launch" data-act="quick"><svg><use href="#i-signal"/></svg> Quick Match <svg class="push"><use href="#i-arrow"/></svg></button></div></section></div>
+ <section class="armory" aria-label="Starting weapon"><div class="section-line"><div><span class="section-mark"></span><h2>Loadout rack</h2><span class="count">04</span></div><p>Select your starting weapon</p></div><div id="weapon-rack"></div></section>
+ <footer><span><i class="led"></i> DESKTOP CLIENT</span><span>WASD <i>MOVE</i><em>/</em> MOUSE <i>LOOK</i><em>/</em> ESC <i>PAUSE</i></span></footer></main>
+<section id="stage" hidden aria-label="Match"><div id="game-world"></div><div id="hud"><div class="hud-map"><i></i><span>SUNSPOKE DEPOT<small id="hud-mode">OFFLINE DEATHMATCH</small></span></div><div class="hud-clock"><span>DEATHMATCH</span><strong id="timer">5:00</strong></div><div class="hud-right"><div id="net-label"></div><div id="kill-feed"></div></div>
+ <div id="scope" hidden><div></div></div><div id="reticle"><i></i><i></i><i></i><i></i><b></b></div><div id="hitmark">×</div><div id="damage"></div><div id="combat-text"></div><div id="respawn" hidden></div>
+ <div class="vitals hud-panel"><span class="hud-tiny">VITALS</span><div><svg><use href="#i-plus"/></svg><b id="hp">100</b><small>HP</small></div><div class="health-track"><i id="hp-bar"></i></div></div>
+ <div class="hud-controls"><kbd>TAB</kbd> SCOREBOARD <span>·</span> <kbd>ESC</kbd> MENU</div><div class="ammo hud-panel"><span class="hud-tiny" id="weapon-label"></span><div><b id="mag">30</b><small>/ <span id="reserve">150</span></small></div><span id="gun-state"></span></div></div></section>
+<div id="score-layer" hidden></div><div id="modal-layer" hidden><section id="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title"></section></div><div id="toast" role="status" aria-live="polite"></div>
+<noscript>Enable JavaScript to play Rivetwake.</noscript><script type="module" src="./client.mjs"></script></body></html>
