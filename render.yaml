@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: rivetwake-game
+    runtime: node
+    plan: free
+    buildCommand: node --check server/server.mjs
+    startCommand: node server/server.mjs
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.x
+      - key: HOST
+        value: 0.0.0.0
