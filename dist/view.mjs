@@ -137,13 +137,16 @@ export class ArenaView {
   frame(dt,me,players,slot,look,ads,reloadFrac) {
     if(!this.resize() || !me)return;
     this.menuActors.visible=false;this.clock+=dt;
-    if(this.life!==me.life) {this.life=me.life;this.kick=0;this.ads=0;this.walk=0;}
+    if(this.life!==me.life) {this.life=me.life;this.slideLean=0;this.kick=0;this.ads=0;this.walk=0;}
     this.ads=lerp(this.ads,ads&&me.hp>0?1:0,1-Math.exp(-17*dt));this.kick*=Math.exp(-13*dt);
     const speed=Math.hypot(me.vx,me.vz);this.walk+=speed*dt*2.1;
-    const sway=Math.min(1,speed/5.95)*(me.grounded?1:.15)*(1-this.ads*.89);
-    this.camera.fov=lerp(me.sprinting?82:76,WEAPONS[slot].zoom,this.ads);this.camera.updateProjectionMatrix();
-    this.camera.position.set(me.x,me.y+(me.hp>0?EYE-(me.slideLeft>0?.32:0):.87)+Math.abs(Math.sin(this.walk))*.033*sway,me.z);
-    this.camera.rotation.set(look.pitch,look.yaw,.004*Math.sin(this.walk)*sway,'YXZ');
+    const sliding=me.hp>0 && me.slideLeft>0;
+    this.slideLean=lerp(this.slideLean||0,sliding?1:0,1-Math.exp(-dt*(sliding?17:10)));
+    const lean=this.slideLean;
+    const sway=(1-lean)*Math.min(1,speed/5.95)*(me.grounded?1:.15)*(1-this.ads*.89);
+    this.camera.fov=lerp(me.sprinting?82:76+4*lean,WEAPONS[slot].zoom,this.ads);this.camera.updateProjectionMatrix();
+    this.camera.position.set(me.x,me.y+(me.hp>0?EYE-.32*lean:.87)+Math.abs(Math.sin(this.walk))*.033*sway,me.z);
+    this.camera.rotation.set(look.pitch,look.yaw,.004*Math.sin(this.walk)*sway+.048*lean*(1-this.ads),'YXZ');
     const seen=new Set();
     for(const p of players) {
       if(p.id===me.id)continue;seen.add(p.id);
@@ -152,7 +155,8 @@ export class ArenaView {
       e.model.position.set(p.x,p.y,p.z);e.model.rotation.y=p.yaw;
       e.tag.visible=this.camera.position.distanceTo(e.model.position)<30;
       const pace=Math.hypot(p.vx,p.vz);e.stride+=pace*dt*2.05;e.kick*=Math.exp(-16*dt);
-      poseFighter(e.model,{crouch:p.slideLeft>0?1:0,weapon:p.weapon,pitch:p.pitch,moving:clamp(pace/5.9,0,1),stride:e.stride,recoil:e.kick});
+      e.slideLean=lerp(e.slideLean||0,p.slideLeft>0?1:0,1-Math.exp(-dt*14));
+      poseFighter(e.model,{crouch:e.slideLean,weapon:p.weapon,pitch:p.pitch,moving:clamp(pace/5.9,0,1),stride:e.stride,recoil:e.kick});
     }
     for(const [id,e] of this.actors) if(!seen.has(id)){this.scene.remove(e.model);e.tag.material.map.dispose();e.tag.material.dispose();this.actors.delete(id);}
     for(let i=this.effects.length-1;i>=0;i--){const e=this.effects[i];e.life-=dt;if(e.life<=0){this.scene.remove(e.obj);e.obj.material.dispose();e.obj.geometry.dispose();this.effects.splice(i,1);}else e.obj.material.opacity=e.life/e.max;}
@@ -161,6 +165,10 @@ export class ArenaView {
     const bob=Math.sin(this.walk)*sway;
     this.gunRig.position.set(lerp(.235+Math.sin(this.walk*.5)*.012*sway,0,this.ads),lerp(-.225+bob*.012,-gun.userData.sightHeight,this.ads)-reload*.18,lerp(-.425,-.36,this.ads)+this.kick*.065);
     this.gunRig.rotation.set(this.kick*.12-reload*.41,lerp(.025,0,this.ads),reload*-.61+bob*.012);
+    const hipLean=lean*(1-this.ads);
+    this.gunRig.rotation.z-=hipLean*.32;
+    this.gunRig.position.y-=hipLean*.055;
+    this.gunRig.position.x-=hipLean*.085;
     this.flash.visible=performance.now()<(this.flashUntil||0);
     if(this.flash.visible){this.flash.position.copy(gun.localToWorld(gun.userData.muzzle.clone()));this.flash.rotation.z=Math.random()*6;this.flash.scale.set(1,1,1.9);}
     this.renderer.autoClear=true;this.renderer.render(this.scene,this.camera);

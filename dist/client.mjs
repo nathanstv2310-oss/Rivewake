@@ -18,20 +18,46 @@ for(const [key,lo,hi,fallback] of [['difficulty',0,2,1],['slot',0,3,0],['sensiti
 const persist=()=>{try{localStorage.setItem('rivetwake.settings.1',JSON.stringify(settings));}catch{}};
 const defaults={forward:'KeyW',back:'KeyS',left:'KeyA',right:'KeyD',jump:'Space',sprint:'ShiftLeft',slide:'KeyC',fire:'Mouse0',aim:'Mouse2',reload:'KeyR',weapon1:'Digit1',weapon2:'Digit2',weapon3:'Digit3',weapon4:'Digit4',scores:'Tab',pause:'Escape'};
 const labels={forward:'Move forward',back:'Move backward',left:'Strafe left',right:'Strafe right',jump:'Jump',sprint:'Sprint',slide:'Slide',fire:'Fire',aim:'Aim down sights',reload:'Reload',weapon1:'Assault rifle',weapon2:'Shotgun',weapon3:'Sniper rifle',weapon4:'Pistol',scores:'Scoreboard',pause:'Pause'};
-let bindings={...defaults,...settings.bindings}, capture=null,slidePulse=false;
+let bindings={...defaults,...settings.bindings}, slidePulse=false;
 const keyName=code=>({Mouse0:'Left click',Mouse1:'Middle click',Mouse2:'Right click',Mouse3:'Mouse 4',Mouse4:'Mouse 5',Escape:'Esc'}[code]||code.replace(/^(Key|Digit)/,'').replace(/(Left|Right)$/,' $1'));
 function updateBindings(){
   settings.bindings={...bindings};persist();
-  for(const b of document.querySelectorAll('[data-bind]'))b.textContent=capture===b.dataset.bind?'Press key or click…':keyName(bindings[b.dataset.bind]);
+  for(const select of document.querySelectorAll('select[data-bind]')){
+    const code=bindings[select.dataset.bind];
+    if(!Array.from(select.options).some(o=>o.value===code))select.add(new Option(keyName(code)||'Unbound',code));
+    select.value=code;
+  }
   document.querySelector('.hud-controls').innerHTML='<kbd>'+esc(keyName(bindings.scores))+'</kbd> SCOREBOARD · <kbd>'+esc(keyName(bindings.pause))+'</kbd> MENU';
   document.querySelector('footer span:last-child').textContent=['forward','left','back','right'].map(k=>keyName(bindings[k])).join(' ')+'  MOVE  /  MOUSE LOOK';
 }
-function rebind(code){
-  if(!capture)return false;
-  if(code==='Escape' && capture!=='pause'){capture=null;updateBindings();return true;}
-  const used=Object.keys(defaults).find(action=>bindings[action]===code);
-  if(used)bindings[used]=bindings[capture];
-  bindings[capture]=code;capture=null;updateBindings();return true;
+function rebind(action,code){
+  const used=Object.keys(defaults).find(k=>bindings[k]===code);
+  if(used && used!==action && bindings[action]==='Escape'){
+    updateBindings();
+    $('bind-status').textContent='Esc is reserved for releasing the mouse. Choose a free pause key or reassign '+labels[used]+' first.';
+    return;
+  }
+  if(used)bindings[used]=bindings[action];
+  bindings[action]=code;
+  updateBindings();
+  $('bind-status').textContent=labels[action]+' saved to '+keyName(code)+'.';
+}
+function bindingEditor(){
+  const groups={
+    Letters:Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ',letter=>'Key'+letter),
+    Numbers:Array.from('0123456789',n=>'Digit'+n),
+    Mouse:['Mouse0','Mouse1','Mouse2','Mouse3','Mouse4'],
+    Controls:'Space Tab Enter Backspace ShiftLeft ShiftRight ControlLeft ControlRight AltLeft AltRight CapsLock ArrowUp ArrowDown ArrowLeft ArrowRight Home End Insert Delete PageUp PageDown'.split(' '),
+    Symbols:'Comma Period Slash Semicolon Quote BracketLeft BracketRight Backslash Backquote Minus Equal IntlBackslash IntlRo IntlYen'.split(' '),
+    Numpad:[...Array.from('0123456789',n=>'Numpad'+n),...['Add','Subtract','Multiply','Divide','Decimal','Enter'].map(n=>'Numpad'+n)],
+    Function:Array.from({length:24},(_,i)=>'F'+(i+1))
+  };
+  const fields=Object.entries(labels).map(([action,label])=>{
+    const options=Object.entries(groups).map(([group,codes])=>`<optgroup label="${group}">${codes.map(code=>`<option value="${code}" ${bindings[action]===code?'selected':''}>${keyName(code)}</option>`).join('')}</optgroup>`).join('');
+    const extra=Object.values(groups).flat().includes(bindings[action])?'':`<option selected value="${esc(bindings[action])}">${esc(keyName(bindings[action]))}</option>`;
+    return `<label>${label}<select data-bind="${action}">${extra}${options}${bindings[action]!=='Escape'&&action==='pause'?'<option value="Escape">Esc</option>':''}</select></label>`;
+  }).join('');
+  return `<section class="bind-editor"><h3>Keybindings</h3><p class="setting-help" id="bind-status" role="status">Choose a key or mouse button. Changes save immediately. Duplicate bindings swap.</p><div class="bind-grid">${fields}</div>${btn('reset-binds','Restore defaults','quiet')}</section>`;
 }
 function gameButton(code,down){
   const action=Object.keys(defaults).find(k=>bindings[k]===code);
@@ -65,7 +91,7 @@ function modal(type,kicker,title,content,{wide=false,close=true}={}) {
   $('modal').innerHTML=`<div class="dialog-top"><div class="overline"><span class="status-square"></span>${kicker}</div>${close?`<button class="icon-btn" data-act="back" aria-label="Close dialog">${icon('cross')}</button>`:''}</div><h2 class="dialog-title" id="dialog-title">${title}</h2>${content}`;
   if(fresh){const focus=$('modal').querySelector('[autofocus],input:not([type=range]):not([type=checkbox]),button:not(.icon-btn),select');focus?.focus({preventScroll:true});}
 }
-function hideModal(){capture=null;dialog='';$('modal-layer').hidden=true;}
+function hideModal(){dialog='';$('modal-layer').hidden=true;}
 function errorDialog(message,network=false){
   modal('error',network?'NETWORK / CONNECTION':'CLIENT / DISPLAY',network?'Connection issue':'Arena unavailable',`<p class="dialog-desc">${esc(message)}</p>${network?'<p class="inline-note">For local multiplayer, open the game served by the included Node server. A static website needs a running WebSocket endpoint.</p>':''}<div class="dialog-actions">${network?btn('net-settings','Server settings'):''}${btn('main','Back to deck','primary')}</div>`);
 }
@@ -85,7 +111,7 @@ function showGuide(){
 }
 function showSettings(from){
   returnTo=from|| (screen==='game'?'pause':room?'lobby':'home');
-  modal('settings','CLIENT / PREFERENCES','Settings',`<label class="field-row" for="sens">Mouse sensitivity <output id="sens-val">${settings.sensitivity.toFixed(2)}×</output></label><input type="range" id="sens" min=".25" max="2.5" step=".05" value="${settings.sensitivity}"><label class="field-row" for="vol">Sound volume <output id="vol-val">${Math.round(settings.volume*100)}%</output></label><input type="range" id="vol" min="0" max="100" value="${Math.round(settings.volume*100)}"><label class="field" for="quality">GRAPHICS QUALITY</label><select id="quality">${['Performance','Balanced','High'].map((v,i)=>`<option value="${i}" ${i===settings.quality?'selected':''}>${v}</option>`).join('')}</select><details><summary style="cursor:pointer;padding:12px 0">Keybindings</summary><p class="setting-help">Select an action, then press a key or mouse button. Conflicting bindings swap. Esc always releases the cursor.</p>${Object.entries(labels).map(([k,v])=>`<div class="controls-row">${v}<button class="secondary" data-bind="${k}" data-act="bind">${esc(keyName(bindings[k]))}</button></div>`).join('')}${btn('reset-binds','Restore defaults','quiet')}</details><label class="field" for="server-url">MULTIPLAYER SERVER</label><input class="modal-field" id="server-url" placeholder="Same host · /ws" spellcheck="false" value="${esc(settings.server)}"><p class="setting-help">Leave empty for the site default, or enter your server’s wss:// address. Changes apply to your next connection.</p><p id="settings-error" class="error-text"></p><div class="dialog-actions">${btn('save','Save settings','primary')}</div>`);
+  modal('settings','CLIENT / PREFERENCES','Settings',`${bindingEditor()}<label class="field-row" for="sens">Mouse sensitivity <output id="sens-val">${settings.sensitivity.toFixed(2)}×</output></label><input type="range" id="sens" min=".25" max="2.5" step=".05" value="${settings.sensitivity}"><label class="field-row" for="vol">Sound volume <output id="vol-val">${Math.round(settings.volume*100)}%</output></label><input type="range" id="vol" min="0" max="100" value="${Math.round(settings.volume*100)}"><label class="field" for="quality">GRAPHICS QUALITY</label><select id="quality">${['Performance','Balanced','High'].map((v,i)=>`<option value="${i}" ${i===settings.quality?'selected':''}>${v}</option>`).join('')}</select><label class="field" for="server-url">MULTIPLAYER SERVER</label><input class="modal-field" id="server-url" placeholder="Same host · /ws" spellcheck="false" value="${esc(settings.server)}"><p class="setting-help">Leave empty for the site default, or enter your server’s wss:// address. Changes apply to your next connection.</p><p id="settings-error" class="error-text"></p><div class="dialog-actions">${btn('save','Save settings','primary')}</div>`);
 }
 function saveSettings(){
   const value=$('server-url').value.trim();try{if(value)endpoint(value);}catch(e){$('settings-error').textContent=e.message;return;}
@@ -224,17 +250,13 @@ document.addEventListener('mousemove',e=>{
   if(cursorAim){const edge=v=>Math.sign(v)*clamp((Math.abs(v)-.82)/.18,0,1);edgeX=edge(e.clientX/innerWidth*2-1);edgeY=edge(e.clientY/innerHeight*2-1);}
   look.yaw=Math.atan2(Math.sin(look.yaw-e.movementX*scale),Math.cos(look.yaw-e.movementX*scale));look.pitch=clamp(look.pitch-e.movementY*scale,-1.48,1.48);
 });
-let suppressClick=false;
+
 document.addEventListener('mousedown',e=>{
-  if(capture && dialog==='settings'){e.preventDefault();rebind('Mouse'+e.button);suppressClick=true;return;}
-  suppressClick=false;
   if(locked && gameButton('Mouse'+e.button,true))e.preventDefault();
 });
-document.addEventListener('click',e=>{if(suppressClick){suppressClick=false;e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('mouseup',e=>{if(locked)gameButton('Mouse'+e.button,false);});
 document.addEventListener('contextmenu',e=>{if(screen==='game'||dialog==='settings')e.preventDefault();});
 document.addEventListener('keydown',e=>{
-  if(capture && dialog==='settings'){e.preventDefault();if(!e.repeat)rebind(e.code);return;}
   if(!locked || screen!=='game'){
     if(e.key==='Escape' && dialog && !['pause','deploy','results'].includes(dialog)){e.preventDefault();back();}
     if(e.key==='Enter' && e.target.id==='join-code')document.querySelector('[data-act=join]')?.click();
@@ -256,6 +278,7 @@ document.addEventListener('input',e=>{
   if(e.target.id==='join-code')e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
 });
 document.addEventListener('change',e=>{
+  if(e.target.matches('select[data-bind]'))rebind(e.target.dataset.bind,e.target.value);
   if(e.target.id==='quality'){settings.quality=+e.target.value;view?.quality(settings.quality);persist();}
   if(['fill','room-difficulty'].includes(e.target.id))link?.send({t:'options',fill:$('fill').checked,difficulty:+$('room-difficulty').value});
 });
@@ -270,8 +293,7 @@ document.addEventListener('click',e=>{
     case 'guide':showGuide();break;
     case 'settings':showSettings();break;
     case 'net-settings':showSettings('home');break;
-    case 'bind':capture=b.dataset.bind;updateBindings();break;
-    case 'reset-binds':capture=null;bindings={...defaults};updateBindings();break;
+    case 'reset-binds':bindings={...defaults};updateBindings();$('bind-status').textContent='Default bindings restored.';break;
     case 'save':saveSettings();break;
     case 'offline':offline();break;
     case 'resume':requestAim();break;

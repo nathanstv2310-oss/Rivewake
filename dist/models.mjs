@@ -544,14 +544,15 @@ export function poseFighter(fighter, {stride = 0, moving = 0, pitch = 0, weapon 
   const pace = THREE.MathUtils.clamp(moving, 0, 1);
   const low = THREE.MathUtils.clamp(crouch, 0, 1);
   const kick = THREE.MathUtils.clamp(recoil, 0, 1);
-  const swing = Math.sin(stride) * pace;
-  rig.hips.position.y = 0.764 - low * 0.174 + Math.abs(swing) * 0.013;
-  rig.torso.rotation.y = swing * 0.052;
-  rig.torso.rotation.z = swing * 0.022;
+  const swing = Math.sin(stride) * pace * (1-low);
+  rig.hips.position.y = 0.764 - low * 0.30 + Math.abs(swing) * 0.013;
+  rig.torso.rotation.x = -low * .21;
+  rig.torso.rotation.y = swing * .052 + low * .17;
+  rig.torso.rotation.z = swing * .022 + low * .16;
   for (let i = 0; i < 2; i++) {
     const step = i === 0 ? swing : -swing;
-    rig.legs[i].upper.rotation.x = step * 0.59 + low * 0.64;
-    rig.legs[i].lower.rotation.x = -Math.max(0, -step) * 0.72 - low * 1.26;
+    rig.legs[i].upper.rotation.x = step * 0.59 + low * (i===0?1.1:.74);
+    rig.legs[i].lower.rotation.x = -Math.max(0, -step) * 0.72 - low * (i===0?.40:1.85);
   }
   rig.aim.rotation.x = THREE.MathUtils.clamp(pitch, -1.45, 1.45) + kick * 0.095;
   rig.aim.position.z = -0.022 + kick * 0.050;
