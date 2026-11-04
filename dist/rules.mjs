@@ -43,6 +43,21 @@ export function movePlayer(p, input, dt = STEP) {
   const vx = (input.s*cs-input.f*sn)*speed/length, vz = (-input.f*cs-input.s*sn)*speed/length;
   const accel = (p.grounded ? 51 : 19)*dt;
   p.vx += clamp(vx-p.vx,-accel,accel); p.vz += clamp(vz-p.vz,-accel,accel);
+  p.slideCooldown=Math.max(0,(p.slideCooldown||0)-dt);
+  p.slideLeft=Math.max(0,(p.slideLeft||0)-dt);
+  if(input.slide && !p.slideLatch && !p.slideCooldown && p.grounded && !input.jump){
+    const magnitude=Math.hypot(p.vx,p.vz);
+    if(magnitude>2){
+      p.slideX=p.vx/magnitude;p.slideZ=p.vz/magnitude;
+      p.slideLeft=.56;p.slideCooldown=1.25;
+    }
+  }
+  p.slideLatch=!!input.slide;
+  if(input.jump || !p.grounded)p.slideLeft=0;
+  if(p.slideLeft>0){
+    const momentum=5.8+8*p.slideLeft;
+    p.vx=p.slideX*momentum;p.vz=p.slideZ*momentum;p.sprinting=false;
+  }
   const bounds = ARENA.bounds, stepUp = p.grounded ? STEP_UP : .015;
   const x = clamp(p.x+p.vx*dt,bounds.minX+RADIUS,bounds.maxX-RADIUS);
   if (canStandAt(p,x,p.z,stepUp)) p.x=x; else p.vx=0;
@@ -97,8 +112,9 @@ export function wallDistance(o, d, limit) {
   return closest;
 }
 export function fighterHit(o,d,p,limit) {
-  const body=interval(o,d,p.x-.32,p.x+.32,p.y+.035,p.y+1.39,p.z-.32,p.z+.32,limit);
-  const head=interval(o,d,p.x-.245,p.x+.245,p.y+1.39,p.y+1.84,p.z-.245,p.z+.245,limit);
+  const drop=p.slideLeft>0?.32:0;
+  const body=interval(o,d,p.x-.32,p.x+.32,p.y+.035,p.y+1.39-drop,p.z-.32,p.z+.32,limit);
+  const head=interval(o,d,p.x-.245,p.x+.245,p.y+1.39-drop,p.y+1.84-drop,p.z-.245,p.z+.245,limit);
   if(head && (!body || head[0]<=body[0])) return {t:head[0],head:true};
   return body ? {t:body[0],head:false} : null;
 }

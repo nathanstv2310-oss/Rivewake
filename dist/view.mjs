@@ -142,7 +142,7 @@ export class ArenaView {
     const speed=Math.hypot(me.vx,me.vz);this.walk+=speed*dt*2.1;
     const sway=Math.min(1,speed/5.95)*(me.grounded?1:.15)*(1-this.ads*.89);
     this.camera.fov=lerp(me.sprinting?82:76,WEAPONS[slot].zoom,this.ads);this.camera.updateProjectionMatrix();
-    this.camera.position.set(me.x,me.y+(me.hp>0?EYE:.87)+Math.abs(Math.sin(this.walk))*.033*sway,me.z);
+    this.camera.position.set(me.x,me.y+(me.hp>0?EYE-(me.slideLeft>0?.32:0):.87)+Math.abs(Math.sin(this.walk))*.033*sway,me.z);
     this.camera.rotation.set(look.pitch,look.yaw,.004*Math.sin(this.walk)*sway,'YXZ');
     const seen=new Set();
     for(const p of players) {
@@ -152,7 +152,7 @@ export class ArenaView {
       e.model.position.set(p.x,p.y,p.z);e.model.rotation.y=p.yaw;
       e.tag.visible=this.camera.position.distanceTo(e.model.position)<30;
       const pace=Math.hypot(p.vx,p.vz);e.stride+=pace*dt*2.05;e.kick*=Math.exp(-16*dt);
-      poseFighter(e.model,{weapon:p.weapon,pitch:p.pitch,moving:clamp(pace/5.9,0,1),stride:e.stride,recoil:e.kick});
+      poseFighter(e.model,{crouch:p.slideLeft>0?1:0,weapon:p.weapon,pitch:p.pitch,moving:clamp(pace/5.9,0,1),stride:e.stride,recoil:e.kick});
     }
     for(const [id,e] of this.actors) if(!seen.has(id)){this.scene.remove(e.model);e.tag.material.map.dispose();e.tag.material.dispose();this.actors.delete(id);}
     for(let i=this.effects.length-1;i>=0;i--){const e=this.effects[i];e.life-=dt;if(e.life<=0){this.scene.remove(e.obj);e.obj.material.dispose();e.obj.geometry.dispose();this.effects.splice(i,1);}else e.obj.material.opacity=e.life/e.max;}

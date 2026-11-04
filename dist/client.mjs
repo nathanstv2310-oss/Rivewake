@@ -16,6 +16,40 @@ for(const [key,lo,hi,fallback] of [['difficulty',0,2,1],['slot',0,3,0],['sensiti
   if(['slot','difficulty','quality'].includes(key))settings[key]=Math.trunc(settings[key]);
 }
 const persist=()=>{try{localStorage.setItem('rivetwake.settings.1',JSON.stringify(settings));}catch{}};
+const defaults={forward:'KeyW',back:'KeyS',left:'KeyA',right:'KeyD',jump:'Space',sprint:'ShiftLeft',slide:'KeyC',fire:'Mouse0',aim:'Mouse2',reload:'KeyR',weapon1:'Digit1',weapon2:'Digit2',weapon3:'Digit3',weapon4:'Digit4',scores:'Tab',pause:'Escape'};
+const labels={forward:'Move forward',back:'Move backward',left:'Strafe left',right:'Strafe right',jump:'Jump',sprint:'Sprint',slide:'Slide',fire:'Fire',aim:'Aim down sights',reload:'Reload',weapon1:'Assault rifle',weapon2:'Shotgun',weapon3:'Sniper rifle',weapon4:'Pistol',scores:'Scoreboard',pause:'Pause'};
+let bindings={...defaults,...settings.bindings}, capture=null,slidePulse=false;
+const keyName=code=>({Mouse0:'Left click',Mouse1:'Middle click',Mouse2:'Right click',Mouse3:'Mouse 4',Mouse4:'Mouse 5',Escape:'Esc'}[code]||code.replace(/^(Key|Digit)/,'').replace(/(Left|Right)$/,' $1'));
+function updateBindings(){
+  settings.bindings={...bindings};persist();
+  for(const b of document.querySelectorAll('[data-bind]'))b.textContent=capture===b.dataset.bind?'Press key or click…':keyName(bindings[b.dataset.bind]);
+  document.querySelector('.hud-controls').innerHTML='<kbd>'+esc(keyName(bindings.scores))+'</kbd> SCOREBOARD · <kbd>'+esc(keyName(bindings.pause))+'</kbd> MENU';
+  document.querySelector('footer span:last-child').textContent=['forward','left','back','right'].map(k=>keyName(bindings[k])).join(' ')+'  MOVE  /  MOUSE LOOK';
+}
+function rebind(code){
+  if(!capture)return false;
+  if(code==='Escape' && capture!=='pause'){capture=null;updateBindings();return true;}
+  const used=Object.keys(defaults).find(action=>bindings[action]===code);
+  if(used)bindings[used]=bindings[capture];
+  bindings[capture]=code;capture=null;updateBindings();return true;
+}
+function gameButton(code,down){
+  const action=Object.keys(defaults).find(k=>bindings[k]===code);
+  if(!action)return false;
+  if(down && keys.has(action))return true;
+  if(down)keys.add(action);else keys.delete(action);
+  if(action==='fire'){fire=down;firePulse ||= down;}
+  if(action==='aim')ads=down;
+  if(action==='scores'){tab=down;drawScores();}
+  if(down){
+    if(action==='jump')jumpPulse=true;
+    if(action==='slide')slidePulse=true;
+    if(action==='reload')reloadPulse=true;
+    if(action.startsWith('weapon'))slot=Number(action.slice(-1))-1;
+    if(action==='pause'){release();showPause();}
+  }
+  return true;
+}
 function callsign(){const name=$('nickname').value.trim().replace(/[<>\u0000-\u001f]/g,'').slice(0,16)||'Pilot';$('nickname').value=settings.name=name;persist();return name;}
 $('nickname').value=String(settings.name||'Pilot').slice(0,16);
 $('nickname').addEventListener('change',callsign);
@@ -31,7 +65,7 @@ function modal(type,kicker,title,content,{wide=false,close=true}={}) {
   $('modal').innerHTML=`<div class="dialog-top"><div class="overline"><span class="status-square"></span>${kicker}</div>${close?`<button class="icon-btn" data-act="back" aria-label="Close dialog">${icon('cross')}</button>`:''}</div><h2 class="dialog-title" id="dialog-title">${title}</h2>${content}`;
   if(fresh){const focus=$('modal').querySelector('[autofocus],input:not([type=range]):not([type=checkbox]),button:not(.icon-btn),select');focus?.focus({preventScroll:true});}
 }
-function hideModal(){dialog='';$('modal-layer').hidden=true;}
+function hideModal(){capture=null;dialog='';$('modal-layer').hidden=true;}
 function errorDialog(message,network=false){
   modal('error',network?'NETWORK / CONNECTION':'CLIENT / DISPLAY',network?'Connection issue':'Arena unavailable',`<p class="dialog-desc">${esc(message)}</p>${network?'<p class="inline-note">For local multiplayer, open the game served by the included Node server. A static website needs a running WebSocket endpoint.</p>':''}<div class="dialog-actions">${network?btn('net-settings','Server settings'):''}${btn('main','Back to deck','primary')}</div>`);
 }
@@ -46,12 +80,12 @@ function selectMode(value){
 function muteLabel(){const b=$('mute-btn');b.innerHTML=icon(settings.volume?'volume':'muted');b.title=b.ariaLabel=settings.volume?'Mute audio':'Enable audio';}
 function showGuide(){
   returnTo=screen==='game'?'pause':'home';
-  const rows=[['Move',['W','A','S','D']],['Look / fire',['Mouse','Left click']],['Aim down sights',['Hold right click']],['Jump / sprint',['Space','Shift']],['Reload / switch weapon',['R','1–4']],['Scoreboard / pause',['Hold Tab','Esc']]];
+  const rows=Object.entries(labels).map(([k,name])=>[name,[keyName(bindings[k])]]);
   modal('guide','FIELD GUIDE / 01','How to play',`<p class="dialog-desc">Score the most points in five minutes. An elimination earns 100 points, or 125 for a finishing headshot. You respawn after 2.8 seconds.</p>${rows.map(([a,b])=>`<div class="controls-row"><span>${a}</span><span>${b.map(k=>`<kbd>${k}</kbd>`).join('')}</span></div>`).join('')}<p class="dialog-note">Ramps lead to both rooftops. Use cover to reload, and aim down sights for tighter shots. Every computer-controlled fighter carries a <strong>BOT</strong> tag.</p><div class="dialog-actions">${btn('back','Got it','primary')}</div>`);
 }
 function showSettings(from){
   returnTo=from|| (screen==='game'?'pause':room?'lobby':'home');
-  modal('settings','CLIENT / PREFERENCES','Settings',`<label class="field-row" for="sens">Mouse sensitivity <output id="sens-val">${settings.sensitivity.toFixed(2)}×</output></label><input type="range" id="sens" min=".25" max="2.5" step=".05" value="${settings.sensitivity}"><label class="field-row" for="vol">Sound volume <output id="vol-val">${Math.round(settings.volume*100)}%</output></label><input type="range" id="vol" min="0" max="100" value="${Math.round(settings.volume*100)}"><label class="field" for="quality">GRAPHICS QUALITY</label><select id="quality">${['Performance','Balanced','High'].map((v,i)=>`<option value="${i}" ${i===settings.quality?'selected':''}>${v}</option>`).join('')}</select><label class="field" for="server-url">MULTIPLAYER SERVER</label><input class="modal-field" id="server-url" placeholder="Same host · /ws" spellcheck="false" value="${esc(settings.server)}"><p class="setting-help">Leave empty for the site default, or enter your server’s wss:// address. Changes apply to your next connection.</p><p id="settings-error" class="error-text"></p><div class="dialog-actions">${btn('save','Save settings','primary')}</div>`);
+  modal('settings','CLIENT / PREFERENCES','Settings',`<label class="field-row" for="sens">Mouse sensitivity <output id="sens-val">${settings.sensitivity.toFixed(2)}×</output></label><input type="range" id="sens" min=".25" max="2.5" step=".05" value="${settings.sensitivity}"><label class="field-row" for="vol">Sound volume <output id="vol-val">${Math.round(settings.volume*100)}%</output></label><input type="range" id="vol" min="0" max="100" value="${Math.round(settings.volume*100)}"><label class="field" for="quality">GRAPHICS QUALITY</label><select id="quality">${['Performance','Balanced','High'].map((v,i)=>`<option value="${i}" ${i===settings.quality?'selected':''}>${v}</option>`).join('')}</select><details><summary style="cursor:pointer;padding:12px 0">Keybindings</summary><p class="setting-help">Select an action, then press a key or mouse button. Conflicting bindings swap. Esc always releases the cursor.</p>${Object.entries(labels).map(([k,v])=>`<div class="controls-row">${v}<button class="secondary" data-bind="${k}" data-act="bind">${esc(keyName(bindings[k]))}</button></div>`).join('')}${btn('reset-binds','Restore defaults','quiet')}</details><label class="field" for="server-url">MULTIPLAYER SERVER</label><input class="modal-field" id="server-url" placeholder="Same host · /ws" spellcheck="false" value="${esc(settings.server)}"><p class="setting-help">Leave empty for the site default, or enter your server’s wss:// address. Changes apply to your next connection.</p><p id="settings-error" class="error-text"></p><div class="dialog-actions">${btn('save','Save settings','primary')}</div>`);
 }
 function saveSettings(){
   const value=$('server-url').value.trim();try{if(value)endpoint(value);}catch(e){$('settings-error').textContent=e.message;return;}
@@ -61,7 +95,7 @@ function scoreboard(players){
   return `<table class="table"><thead><tr><th>#</th><th>FIGHTER</th><th>K</th><th>D</th><th>PTS</th></tr></thead><tbody>${rankPlayers(players).map((p,i)=>`<tr class="${p.id===self?'me':''}"><td>${i+1}</td><td>${esc(p.name)} ${p.bot?'<small class="badge bot">BOT</small>':p.id===self?'<small class="badge">YOU</small>':''}</td><td>${p.kills}</td><td>${p.deaths}</td><td>${p.score}</td></tr>`).join('')}</tbody></table>`;
 }
 function drawScores(){if(!tab||!snap){$('score-layer').hidden=true;return;}$('score-layer').hidden=false;$('score-layer').innerHTML=`<section class="score-box"><div class="overline">SUNSPOKE DEPOT / ${playingOnline?'ROOM '+esc(room?.code):'OFFLINE'}</div><h2>Live standings</h2>${scoreboard(snap.players)}</section>`;}
-function clearKeys(){keys.clear();fire=firePulse=ads=jumpPulse=reloadPulse=tab=false;edgeX=edgeY=0;$('score-layer').hidden=true;}
+function clearKeys(){slidePulse=false;keys.clear();fire=firePulse=ads=jumpPulse=reloadPulse=tab=false;edgeX=edgeY=0;$('score-layer').hidden=true;}
 function release(){clearKeys();cursorAim=false;if(document.pointerLockElement===canvas)document.exitPointerLock();locked=false;}
 function closeLink(){const old=link;link=null;old?.close();room=null;motion=null;}
 function main(){
@@ -164,14 +198,14 @@ function events(list){
   }
 }
 function input(){
-  const i={f:Number(keys.has('KeyW'))-Number(keys.has('KeyS')),s:Number(keys.has('KeyD'))-Number(keys.has('KeyA')),yaw:look.yaw,pitch:look.pitch,fire:fire||firePulse,ads,jump:keys.has('Space')||jumpPulse,sprint:keys.has('ShiftLeft')||keys.has('ShiftRight'),reload:reloadPulse,slot};
-  firePulse=jumpPulse=reloadPulse=false;return i;
+  const i={f:Number(keys.has('forward'))-Number(keys.has('back')),s:Number(keys.has('right'))-Number(keys.has('left')),yaw:look.yaw,pitch:look.pitch,fire:fire||firePulse,ads,jump:keys.has('jump')||jumpPulse,sprint:keys.has('sprint'),slide:slidePulse||keys.has('slide'),reload:reloadPulse,slot};
+  slidePulse=firePulse=jumpPulse=reloadPulse=false;return i;
 }
 function updateHUD(){
   const p=own();if(!p || !snap)return;const now=performance.now(),t=playingOnline?motion.time():snap.time;
   $('timer').textContent=formatTime(300-t);$('hp').textContent=p.hp;$('hp-bar').style.width=p.hp+'%';$('hp-bar').style.background=p.hp<=30?'#ff9c73':'var(--mint)';
   $('mag').textContent=p.mag;$('reserve').textContent=p.reserve;$('weapon-label').textContent=`0${p.weapon+1} / ${WEAPONS[p.weapon].name.toUpperCase()}`;
-  $('gun-state').textContent=p.reloadTo>t?`RELOADING · ${(p.reloadTo-t).toFixed(1)}s`:p.mag===0?'R · RELOAD':WEAPONS[p.weapon].type.toUpperCase();
+  $('gun-state').textContent=p.reloadTo>t?`RELOADING · ${(p.reloadTo-t).toFixed(1)}s`:p.mag===0?keyName(bindings.reload)+' · RELOAD':WEAPONS[p.weapon].type.toUpperCase();
   $('net-label').textContent=playingOnline?`● CONNECTED  /  ${link?.ping??'…'} ms`:'● LOCAL SIMULATION';
   $('respawn').hidden=p.hp>0;if(p.hp<=0)$('respawn').innerHTML=`<b>Rebuilding in ${Math.max(0,p.respawnAt-t).toFixed(1)}s</b><small>${lastDamageBy?'ELIMINATED BY '+esc(lastDamageBy):'RESPAWNING'}</small>`;
   $('scope').hidden=!(ads && p.weapon===2 && p.hp>0 && locked);$('reticle').hidden=p.hp<=0 || !$('scope').hidden;$('reticle').classList.toggle('aim',ads);
@@ -190,10 +224,17 @@ document.addEventListener('mousemove',e=>{
   if(cursorAim){const edge=v=>Math.sign(v)*clamp((Math.abs(v)-.82)/.18,0,1);edgeX=edge(e.clientX/innerWidth*2-1);edgeY=edge(e.clientY/innerHeight*2-1);}
   look.yaw=Math.atan2(Math.sin(look.yaw-e.movementX*scale),Math.cos(look.yaw-e.movementX*scale));look.pitch=clamp(look.pitch-e.movementY*scale,-1.48,1.48);
 });
-document.addEventListener('mousedown',e=>{if(!locked || screen!=='game')return;if(e.button===0)fire=firePulse=true;if(e.button===2)ads=true;});
-document.addEventListener('mouseup',e=>{if(e.button===0)fire=false;if(e.button===2)ads=false;});
-document.addEventListener('contextmenu',e=>{if(screen==='game')e.preventDefault();});
+let suppressClick=false;
+document.addEventListener('mousedown',e=>{
+  if(capture && dialog==='settings'){e.preventDefault();rebind('Mouse'+e.button);suppressClick=true;return;}
+  suppressClick=false;
+  if(locked && gameButton('Mouse'+e.button,true))e.preventDefault();
+});
+document.addEventListener('click',e=>{if(suppressClick){suppressClick=false;e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('mouseup',e=>{if(locked)gameButton('Mouse'+e.button,false);});
+document.addEventListener('contextmenu',e=>{if(screen==='game'||dialog==='settings')e.preventDefault();});
 document.addEventListener('keydown',e=>{
+  if(capture && dialog==='settings'){e.preventDefault();if(!e.repeat)rebind(e.code);return;}
   if(!locked || screen!=='game'){
     if(e.key==='Escape' && dialog && !['pause','deploy','results'].includes(dialog)){e.preventDefault();back();}
     if(e.key==='Enter' && e.target.id==='join-code')document.querySelector('[data-act=join]')?.click();
@@ -203,13 +244,10 @@ document.addEventListener('keydown',e=>{
     }
     return;
   }
-  if(['Tab','Space','ShiftLeft','ShiftRight','KeyW','KeyA','KeyS','KeyD','KeyR','Digit1','Digit2','Digit3','Digit4'].includes(e.code))e.preventDefault();
-  if(e.code==='Tab'){tab=true;drawScores();return;}
-  if(e.code==='Escape'){release();showPause();return;}
-  keys.add(e.code);if(e.repeat)return;
-  if(e.code==='Space')jumpPulse=true;if(e.code==='KeyR')reloadPulse=true;if(/^Digit[1-4]$/.test(e.code))slot=Number(e.code.slice(-1))-1;
+  if(e.code==='Escape'){e.preventDefault();release();showPause();return;}
+  if(gameButton(e.code,true))e.preventDefault();
 });
-document.addEventListener('keyup',e=>{keys.delete(e.code);if(e.code==='Tab'){tab=false;$('score-layer').hidden=true;if(locked)e.preventDefault();}});
+document.addEventListener('keyup',e=>{if(locked && gameButton(e.code,false))e.preventDefault();});
 function blur(){if(screen==='game' && locked){release();showPause();}else clearKeys();}
 window.addEventListener('blur',blur);document.addEventListener('visibilitychange',()=>{if(document.hidden)blur();});
 document.addEventListener('input',e=>{
@@ -232,6 +270,8 @@ document.addEventListener('click',e=>{
     case 'guide':showGuide();break;
     case 'settings':showSettings();break;
     case 'net-settings':showSettings('home');break;
+    case 'bind':capture=b.dataset.bind;updateBindings();break;
+    case 'reset-binds':capture=null;bindings={...defaults};updateBindings();break;
     case 'save':saveSettings();break;
     case 'offline':offline();break;
     case 'resume':requestAim();break;
@@ -281,7 +321,7 @@ function loop(now){
     if(now-lastHUD>48){updateHUD();lastHUD=now;}
   }catch(err){frameError=true;console.error(err);main();errorDialog('The renderer stopped. Reload this tab to initialise the arena again.');}
 }
-selectDifficulty(settings.difficulty);selectMode('offline');muteLabel();rack();
+updateBindings();selectDifficulty(settings.difficulty);selectMode('offline');muteLabel();rack();
 try{view=new ArenaView(canvas,settings.quality);thumbs=view.thumbnails();rack();view.menu(0);$('system-status').textContent='Client ready';}
 catch(err){console.error(err);$('system-status').textContent='WebGL unavailable';}
 requestAnimationFrame(loop);

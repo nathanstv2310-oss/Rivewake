@@ -94,7 +94,7 @@ function readInput(c,m) {
   if(!Number.isSafeInteger(m.seq) || m.seq<=c.lastSeq || ![m.f,m.s,m.yaw,m.pitch,m.slot].every(Number.isFinite)) return;
   c.lastSeq=m.seq;
   const input={seq:m.seq,f:clamp(m.f,-1,1),s:clamp(m.s,-1,1),yaw:Math.atan2(Math.sin(m.yaw),Math.cos(m.yaw)),pitch:clamp(m.pitch,-1.48,1.48),
-    slot:clamp(Math.trunc(m.slot),0,3),fire:m.fire===true,ads:m.ads===true,sprint:m.sprint===true,jump:m.jump===true,reload:m.reload===true};
+    slot:clamp(Math.trunc(m.slot),0,3),fire:m.fire===true,ads:m.ads===true,slide:m.slide===true,sprint:m.sprint===true,jump:m.jump===true,reload:m.reload===true};
   if(c.queue.length>=5) c.queue.shift();c.queue.push(input);
 }
 function handle(c,m) {

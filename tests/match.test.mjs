@@ -1,4 +1,16 @@
 import test from 'node:test';
+
+test('slide gains momentum, respects cover and cannot repeat while held',()=>{
+  const game=new Match(), p=game.add('test','Pilot');
+  Object.assign(p,{x:6,y:0,z:4,yaw:0});
+  const right={...emptyInput(p),s:1};
+  for(let i=0;i<5;i++)movePlayer(p,right);
+  movePlayer(p,{...right,slide:true});
+  assert.ok(p.slideLeft>0 && p.vx>9);
+  assert.equal(game.snapshot().players[0].slideLeft,p.slideLeft);
+  for(let i=0;i<60;i++)movePlayer(p,{...right,slide:true});
+  assert.equal(p.slideLeft,0);assert.ok(p.x<9.7);
+});
 import assert from 'node:assert/strict';
 import { Match } from '../dist/match.mjs';
 import { ARENA } from '../dist/arena.mjs';

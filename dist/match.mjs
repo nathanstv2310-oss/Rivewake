@@ -89,7 +89,7 @@ export class Match {
       const weight=nearest+Math.random()*8-(i===p.lastSpawn?12:0);
       if(weight>best){best=weight;index=i;}
     });
-    Object.assign(p,ARENA.spawns[index],{hp:100,life:p.life+1,lastSpawn:index,pitch:0,vx:0,vy:0,vz:0,grounded:true,jumpLatch:false,
+    Object.assign(p,ARENA.spawns[index],{hp:100,life:p.life+1,lastSpawn:index,pitch:0,vx:0,vy:0,vz:0,grounded:true,slideLatch:false,slideLeft:0,slideCooldown:0,slideX:0,slideZ:0,jumpLatch:false,
       weapon:p.bot ? (p.color+1)%4 : p.weapon??0, ammo:WEAPONS.map(w=>w.mag),reserve:WEAPONS.map(w=>w.reserve),
       reloadTo:0,nextShot:this.time+.23,bloom:0,ads:false,sprinting:false,respawnAt:0,shieldUntil:this.time+1.15,
       brain:{think:0,trigger:this.time+.8,phase:Math.random()*12,path:[],repath:0}});
@@ -108,14 +108,14 @@ export class Match {
     if(!a) return null;
     if(!b) b={t:this.time,pose:p};
     const f=clamp((t-a.t)/Math.max(.001,b.t-a.t),0,1);
-    return {x:lerp(a.pose.x,b.pose.x,f),y:lerp(a.pose.y,b.pose.y,f),z:lerp(a.pose.z,b.pose.z,f)};
+    return {slideLeft:(f<.5?a.pose:b.pose).slideLeft,x:lerp(a.pose.x,b.pose.x,f),y:lerp(a.pose.y,b.pose.y,f),z:lerp(a.pose.z,b.pose.z,f)};
   }
   fire(p,rewind) {
     const w=WEAPONS[p.weapon], now=this.time;
     if(now+.0001<p.nextShot || p.reloadTo || !p.ammo[p.weapon]) return;
     p.ammo[p.weapon]--; p.nextShot=Math.max(now-STEP*.5,p.nextShot)+w.delay;
     p.shieldUntil=0;
-    const o={x:p.x,y:p.y+EYE,z:p.z};
+    const o={x:p.x,y:p.y+EYE-(p.slideLeft>0?.32:0),z:p.z};
     const spread=w.spread*(p.ads?w.aim:1)*(p.grounded?1:2.4)*(1+Math.hypot(p.vx,p.vz)*.055)+p.bloom;
     p.bloom=Math.min(.032,p.bloom+w.kick*(p.ads?.1:.21));
     const candidates=[];
@@ -173,14 +173,14 @@ export class Match {
     }
     for(const p of actions) if(p.hp>0) this.fire(p,rewindById.get(p.id)||0);
     const actors=new Map();
-    for(const p of this.players.values()) if(p.hp>0) actors.set(p.id,{x:p.x,y:p.y,z:p.z,life:p.life});
+    for(const p of this.players.values()) if(p.hp>0) actors.set(p.id,{x:p.x,y:p.y,z:p.z,slideLeft:p.slideLeft,life:p.life});
     this.history.push({t:this.time,actors}); if(this.history.length>10) this.history.shift();
   }
   snapshot() {
     const players=[];
     for(const p of this.players.values()) {
-      const {id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil}=p;
-      const out={id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil,mag:p.ammo[weapon],reserve:p.reserve[weapon]};
+      const {id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,slideLatch,slideLeft,slideCooldown,slideX,slideZ,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil}=p;
+      const out={id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,slideLatch,slideLeft,slideCooldown,slideX,slideZ,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil,mag:p.ammo[weapon],reserve:p.reserve[weapon]};
       for(const key of ['x','y','z','vx','vy','vz','yaw','pitch']) out[key]=+p[key].toFixed(4);
       players.push(out);
     }
