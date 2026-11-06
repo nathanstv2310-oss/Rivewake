@@ -14,7 +14,7 @@ const rooms=new Map(), sockets=new Map();
 const httpServer=http.createServer(async(req,res)=>{
   try {
     const url=new URL(req.url,'http://localhost');
-    if(url.pathname==='/healthz') { res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({game:'Rivetwake',status:'ok',protocol:1})); }
+    if(url.pathname==='/healthz') { res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({game:'Rivetwake',status:'ok',protocol:2,build:'estate-2.0'})); }
     if(req.method!=='GET' && req.method!=='HEAD') {res.writeHead(405);return res.end();}
     const name=decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname);
     const file=path.resolve(root,'.'+name);
@@ -91,6 +91,7 @@ function start(c,r) {
   fillBots(r);publishRoom(r);broadcast(r,{t:'start',snap:r.game.snapshot()});
 }
 function readInput(c,m) {
+  if(m.mapId && m.mapId!==c.room.game.mapId)return;
   if(!Number.isSafeInteger(m.seq) || m.seq<=c.lastSeq || ![m.f,m.s,m.yaw,m.pitch,m.slot].every(Number.isFinite)) return;
   c.lastSeq=m.seq;
   const input={seq:m.seq,f:clamp(m.f,-1,1),s:clamp(m.s,-1,1),yaw:Math.atan2(Math.sin(m.yaw),Math.cos(m.yaw)),pitch:clamp(m.pitch,-1.48,1.48),
@@ -114,7 +115,7 @@ function handle(c,m) {
 }
 wss.on('connection',ws=>{
   const c={id:randomUUID().slice(0,13),ws,ready:false,room:null,queue:[],lastSeq:0,rtt:70,live:true,pingAt:0};
-  sockets.set(c.id,c);send(c,{t:'welcome',id:c.id,protocol:1});
+  sockets.set(c.id,c);send(c,{t:'welcome',id:c.id,protocol:2});
   let windowAt=performance.now(), count=0;
   ws.on('message',(raw,isBinary)=>{
     if(isBinary) return ws.close(1003,'Text messages only');
@@ -142,8 +143,11 @@ setInterval(()=>{
         inputs.set(c.id,active?c.last:emptyInput(p));
         rewinds.set(c.id,Math.min(.2,.085+c.rtt/2000));
       }
+      const previousMap=r.game.mapId;
       r.game.tick(inputs,rewinds);r.ticks++;
-      if(r.ticks%2===0 || r.game.finished) {
+      const rotated=previousMap!==r.game.mapId;
+      if(rotated)for(const c of r.members.values())clearInput(c);
+      if(rotated || r.ticks%2===0 || r.game.finished) {
         const snap=r.game.snapshot();broadcast(r,{t:'snapshot',snap,events:r.game.events.splice(0)});
         if(r.game.finished){r.state='results';publishRoom(r);broadcast(r,{t:'results',snap});}
       }

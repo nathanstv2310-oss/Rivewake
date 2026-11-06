@@ -31,17 +31,18 @@ export class ClientMotion {
   constructor(snap,id) {this.id=id;this.seq=0;this.pending=[];this.frames=[];this.accept(snap);}
   accept(snap) {
     const own=snap.players.find(p=>p.id===this.id);if(!own)return;
+    if(this.latest?.mapId!==snap.mapId){this.frames=[];this.pending=[];}
     const now=performance.now();this.latest=snap;this.at=now;
     this.frames.push(snap);if(this.frames.length>8)this.frames.shift();
     if(!this.local || own.life!==this.local.life || own.hp<=0)this.pending=[];
     this.pending=this.pending.filter(i=>i.seq>own.ack);
-    this.local={...own};if(own.hp>0)for(const i of this.pending)movePlayer(this.local,i);
+    this.local={...own,effects:{...own.effects}};if(own.hp>0)for(const i of this.pending)movePlayer(this.local,i);
   }
   input(link,input) {
-    const i={...input,seq:++this.seq};link.send({t:'input',...i});
+    const i={...input,mapId:this.latest.mapId,seq:++this.seq};link.send({t:'input',...i});
     if(this.local.hp>0){this.pending.push(i);if(this.pending.length>30)this.pending.shift();movePlayer(this.local,i);}
   }
-  time(){return Math.min(300,this.latest.time+Math.min(.3,(performance.now()-this.at)/1000));}
+  time(){return this.latest.time+Math.min(.3,(performance.now()-this.at)/1000);}
   visible() {
     const target=this.time()-.085, frames=this.frames;
     let a=frames[0],b=frames[frames.length-1];

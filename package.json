@@ -1,9 +1,9 @@
 {
   "name": "rivetwake-arena",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Rivetwake — an original rooftop arena shooter with local bots and authoritative WebSocket multiplayer.",
+  "description": "Rivetwake — four rotating arenas, a two-floor mansion, collectible abilities, local bots and authoritative WebSocket multiplayer.",
   "engines": {"node": ">=22"},
   "scripts": {"start": "node server/server.mjs", "test": "node --test tests/*.test.mjs"}
 }

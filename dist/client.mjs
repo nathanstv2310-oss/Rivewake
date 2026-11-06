@@ -1,3 +1,6 @@
+import {arenaFor,mapAt} from './maps.mjs';
+import {ABILITIES} from './abilities.mjs';
+import {assistedLook} from './rules.mjs';
 import { Match } from './match.mjs';
 import { STEP, WEAPONS, BOT_NAMES, DIFFICULTIES, clamp, lerp, rankPlayers, angleDelta } from './rules.mjs';
 import { ArenaView } from './view.mjs';
@@ -84,6 +87,7 @@ let view,thumbs=[],mode='offline',screen='home',dialog='',returnTo='',link=null,
 let snap=null,prior=null,self='',slot=settings.slot,look={yaw:0,pitch:0},locked=false,fire=false,ads=false,jumpPulse=false,reloadPulse=false,tab=false;
 let acc=0,prevTime=performance.now(),lastHUD=0,camMe=null,knownLife=0,hitsUntil=0,damageUntil=0,msgUntil=0,carry=0,nextStep=0,lastMenu=0;
 let feed=[],lastDamageBy='',playingOnline=false,lastVolume=.65,toastTimer,frameError=false;
+let recoilPending=0;
 let cursorAim=false,edgeX=0,edgeY=0,firePulse=false;
 function toast(s){$('toast').textContent=s;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3300);}
 function modal(type,kicker,title,content,{wide=false,close=true}={}) {
@@ -107,7 +111,7 @@ function muteLabel(){const b=$('mute-btn');b.innerHTML=icon(settings.volume?'vol
 function showGuide(){
   returnTo=screen==='game'?'pause':'home';
   const rows=Object.entries(labels).map(([k,name])=>[name,[keyName(bindings[k])]]);
-  modal('guide','FIELD GUIDE / 01','How to play',`<p class="dialog-desc">Score the most points in five minutes. An elimination earns 100 points, or 125 for a finishing headshot. You respawn after 2.8 seconds.</p>${rows.map(([a,b])=>`<div class="controls-row"><span>${a}</span><span>${b.map(k=>`<kbd>${k}</kbd>`).join('')}</span></div>`).join('')}<p class="dialog-note">Ramps lead to both rooftops. Use cover to reload, and aim down sights for tighter shots. Every computer-controlled fighter carries a <strong>BOT</strong> tag.</p><div class="dialog-actions">${btn('back','Got it','primary')}</div>`);
+  modal('guide','FIELD GUIDE / 01','How to play',`<p class="dialog-desc">Maps rotate every five minutes. Your score carries across the arena circuit. An elimination earns 100 points, or 125 for a finishing headshot. You respawn after 2.8 seconds.</p>${rows.map(([a,b])=>`<div class="controls-row"><span>${a}</span><span>${b.map(k=>`<kbd>${k}</kbd>`).join('')}</span></div>`).join('')}<p class="dialog-note">Rivet House has two floors, an open atrium and garden routes. Walk over glowing pickups for 20 seconds of speed, rapid-fire spray, higher jumps or gentle aim assist while aiming. Pickups return after 24 seconds. Green jump pads launch you upward. Use ramps or jump pads to reach higher ground. Every computer-controlled fighter carries a <strong>BOT</strong> tag.</p><div class="dialog-actions">${btn('back','Got it','primary')}</div>`);
 }
 function showSettings(from){
   returnTo=from|| (screen==='game'?'pause':room?'lobby':'home');
@@ -120,7 +124,7 @@ function saveSettings(){
 function scoreboard(players){
   return `<table class="table"><thead><tr><th>#</th><th>FIGHTER</th><th>K</th><th>D</th><th>PTS</th></tr></thead><tbody>${rankPlayers(players).map((p,i)=>`<tr class="${p.id===self?'me':''}"><td>${i+1}</td><td>${esc(p.name)} ${p.bot?'<small class="badge bot">BOT</small>':p.id===self?'<small class="badge">YOU</small>':''}</td><td>${p.kills}</td><td>${p.deaths}</td><td>${p.score}</td></tr>`).join('')}</tbody></table>`;
 }
-function drawScores(){if(!tab||!snap){$('score-layer').hidden=true;return;}$('score-layer').hidden=false;$('score-layer').innerHTML=`<section class="score-box"><div class="overline">SUNSPOKE DEPOT / ${playingOnline?'ROOM '+esc(room?.code):'OFFLINE'}</div><h2>Live standings</h2>${scoreboard(snap.players)}</section>`;}
+function drawScores(){if(!tab||!snap){$('score-layer').hidden=true;return;}$('score-layer').hidden=false;$('score-layer').innerHTML=`<section class="score-box"><div class="overline">${esc(arenaFor(snap.mapId).name.toUpperCase())} / ${playingOnline?'ROOM '+esc(room?.code):'OFFLINE'}</div><h2>Live standings</h2>${scoreboard(snap.players)}</section>`;}
 function clearKeys(){slidePulse=false;keys.clear();fire=firePulse=ads=jumpPulse=reloadPulse=tab=false;edgeX=edgeY=0;$('score-layer').hidden=true;}
 function release(){clearKeys();cursorAim=false;if(document.pointerLockElement===canvas)document.exitPointerLock();locked=false;}
 function closeLink(){const old=link;link=null;old?.close();room=null;motion=null;}
@@ -143,7 +147,7 @@ function connect(mode,extra={}){
     link=current;
   } catch(e){main();errorDialog(e.message,true);}
 }
-function createDialog(){modal('create','MULTIPLAYER / HOST','Create Room',`<p class="dialog-desc">Host a five-minute match for up to eight fighters.</p><label class="field" for="visibility">ROOM VISIBILITY</label><select id="visibility"><option value="private">Private · invite by code</option><option value="public">Public · visible to Quick Match</option></select><div class="dialog-actions">${btn('create',icon('plus')+' Create Room','primary')}</div>`);}
+function createDialog(){modal('create','MULTIPLAYER / HOST','Create Room',`<p class="dialog-desc">Host a rotating arena session for up to eight fighters. Maps switch every five minutes.</p><label class="field" for="visibility">ROOM VISIBILITY</label><select id="visibility"><option value="private">Private · invite by code</option><option value="public">Public · visible to Quick Match</option></select><div class="dialog-actions">${btn('create',icon('plus')+' Create Room','primary')}</div>`);}
 function joinDialog(){modal('join','MULTIPLAYER / INVITE','Join Room',`<p class="dialog-desc">Enter the five-character code from your host’s lobby.</p><label class="field" for="join-code">ROOM CODE</label><input class="modal-field" id="join-code" maxlength="5" placeholder="ABCDE" autocomplete="off" autocapitalize="characters" spellcheck="false"><p id="join-error" class="error-text"></p><div class="dialog-actions">${btn('join',icon('arrow')+' Join Room','primary')}</div>`);}
 function showLobby(){
   if(!room||!link)return;const host=room.host===link.id,me=room.members.find(c=>c.id===link.id);
@@ -172,7 +176,13 @@ function begin(first){
   $('hud-mode').textContent=playingOnline?'ONLINE · '+room.code:'OFFLINE · 5 BOTS';syncLife();updateHUD();
 }
 function own(){return playingOnline?motion?.local:snap?.players.find(p=>p.id===self);}
-function syncLife(){const p=own();if(!p || p.life===knownLife)return;look={yaw:p.yaw,pitch:p.pitch};knownLife=p.life;carry=0;camMe=null;fire=false;audio.spawn();}
+function syncLife(){
+  if(view.setMap(snap.mapId)){
+    prior=null;camMe=null;feed=[];clearKeys();carry=0;
+    recoilPending=0;toast('Arena change · '+arenaFor(snap.mapId).name+' · Scores carried forward');
+  }
+  $('hud-arena').textContent=arenaFor(snap.mapId).name.toUpperCase();
+  const p=own();if(!p || p.life===knownLife)return;look={yaw:p.yaw,pitch:p.pitch};knownLife=p.life;carry=0;recoilPending=0;camMe=null;fire=false;audio.spawn();}
 function offline(){
   if(!view){errorDialog('WebGL 2 is required. Open this game in desktop Chrome or Edge with graphics acceleration enabled.');return;}
   audio.unlock();closeLink();playingOnline=false;self='pilot';world=new Match(settings.difficulty);
@@ -211,7 +221,7 @@ function events(list){
     const me=own();if(!me)continue;
     if(e.type==='shot'){
       view.shot(e,self);audio.shot(e.weapon,e.who===self?0:Math.hypot(e.origin[0]-me.x,e.origin[2]-me.z));
-      if(e.who===self && locked){const kick=WEAPONS[e.weapon].kick*(ads?.68:1);look.pitch=clamp(look.pitch+kick,-1.48,1.48);carry+=kick;}
+      if(e.who===self && locked){const kick=WEAPONS[e.weapon].kick*(ads?.68:1);recoilPending+=kick;}
     }else if(e.type==='hit'){
       if(e.who===self){hitsUntil=now+170;$('hitmark').style.color=e.head?'#ffb854':'#f5ffe2';audio.hit(e.head);}
       if(e.target===self)damageUntil=now+360;
@@ -220,7 +230,9 @@ function events(list){
       feed.unshift({until:now+5400,html:`${who(e.killer,e.killerBot)} <small>${e.head?'⌖ HS':'›'}</small> ${who(e.victim,e.victimBot)}`});feed=feed.slice(0,4);
       if(e.who===self){$('combat-text').textContent=`${e.head?'HEADSHOT':'ELIMINATED'}  ·  ${e.victim}${e.victimBot?' [BOT]':''}  +${e.head?125:100}`;msgUntil=now+1150;audio.kill();}
       if(e.target===self)lastDamageBy=e.killer+(e.killerBot?' [BOT]':'');
-    }else if(e.type==='reload' && e.who===self)audio.reload();
+    }else if(e.type==='pickup' && e.who===self){audio.spawn();toast(ABILITIES[e.ability].name+' · 20 seconds');}
+    else if(e.type==='launch' && e.who===self){audio.step();toast('Jump pad · Airborne!');}
+    else if(e.type==='reload' && e.who===self)audio.reload();
   }
 }
 function input(){
@@ -229,12 +241,14 @@ function input(){
 }
 function updateHUD(){
   const p=own();if(!p || !snap)return;const now=performance.now(),t=playingOnline?motion.time():snap.time;
-  $('timer').textContent=formatTime(300-t);$('hp').textContent=p.hp;$('hp-bar').style.width=p.hp+'%';$('hp-bar').style.background=p.hp<=30?'#ff9c73':'var(--mint)';
+  $('timer').textContent=formatTime(snap.nextMapAt-t);$('rotation-clock').textContent='NEXT · '+arenaFor(snap.nextMapId).name.toUpperCase();
+  $('ability-status').innerHTML=Object.entries(ABILITIES).map(([id,a])=>{const left=p.effects?.[id]||0;return `<span class="ability-chip ${left>0?'active':''}" style="--ability:${a.color}"><b>${a.symbol}</b>${a.short}<strong>${left>0?Math.ceil(left)+'s':'—'}</strong></span>`;}).join('');
+  view.updatePickups(snap.pickups||[],t);$('hp').textContent=p.hp;$('hp-bar').style.width=p.hp+'%';$('hp-bar').style.background=p.hp<=30?'#ff9c73':'var(--mint)';
   $('mag').textContent=p.mag;$('reserve').textContent=p.reserve;$('weapon-label').textContent=`0${p.weapon+1} / ${WEAPONS[p.weapon].name.toUpperCase()}`;
   $('gun-state').textContent=p.reloadTo>t?`RELOADING · ${(p.reloadTo-t).toFixed(1)}s`:p.mag===0?keyName(bindings.reload)+' · RELOAD':WEAPONS[p.weapon].type.toUpperCase();
   $('net-label').textContent=playingOnline?`● CONNECTED  /  ${link?.ping??'…'} ms`:'● LOCAL SIMULATION';
   $('respawn').hidden=p.hp>0;if(p.hp<=0)$('respawn').innerHTML=`<b>Rebuilding in ${Math.max(0,p.respawnAt-t).toFixed(1)}s</b><small>${lastDamageBy?'ELIMINATED BY '+esc(lastDamageBy):'RESPAWNING'}</small>`;
-  $('scope').hidden=!(ads && p.weapon===2 && p.hp>0 && locked);$('reticle').hidden=p.hp<=0 || !$('scope').hidden;$('reticle').classList.toggle('aim',ads);
+  $('scope').hidden=!(view.ads>.9 && p.weapon===2 && p.hp>0 && locked);$('scope').style.opacity=String(clamp((view.ads-.9)/.08,0,1));$('reticle').hidden=p.hp<=0 || !$('scope').hidden;$('reticle').classList.toggle('aim',ads);
   $('hitmark').style.opacity=String(clamp((hitsUntil-now)/75,0,1));$('damage').style.opacity=String(clamp((damageUntil-now)/360,0,1)*.65);
   if(now>msgUntil)$('combat-text').textContent='';feed=feed.filter(f=>f.until>now);const html=feed.map(f=>`<div>${f.html}</div>`).join('');if($('kill-feed').innerHTML!==html)$('kill-feed').innerHTML=html;
   if(tab)drawScores();
@@ -320,6 +334,8 @@ function loop(now){
     if(screen!=='game'||!snap)return;
     if(locked){
       if(cursorAim){look.yaw-=edgeX*dt*2.5*settings.sensitivity;look.pitch=clamp(look.pitch-edgeY*dt*1.5,-1.48,1.48);}
+      const impulse=recoilPending*(1-Math.exp(-32*dt));recoilPending-=impulse;look.pitch=clamp(look.pitch+impulse,-1.48,1.48);carry+=impulse;
+      const assistPlayer=own();if(assistPlayer)look=assistedLook(assistPlayer,snap.players,look,ads,dt,playingOnline?motion.time():snap.time);
       acc+=dt;const back=carry*(1-Math.exp(-4*dt));look.pitch=clamp(look.pitch-back,-1.48,1.48);carry-=back;
       while(acc>=STEP){
         acc-=STEP;const i=input();

@@ -1,6 +1,14 @@
 # Rivetwake
 
-Fight for control of Sunspoke Depot in a five-minute rooftop deathmatch. Play against bots in your browser, or run the included server and invite friends. Each elimination earns 100 points. A finishing headshot earns 125.
+Start at Rivet House Estate and rotate through Saffron Canyon, Bellwether Vale and Sunspoke Depot every five minutes. The circuit repeats automatically, keeping your score across maps. Play against bots in your browser, or run the included server and invite friends. Each elimination earns 100 points. A finishing headshot earns 125.
+
+## Estate update
+
+- Rivet House is twice Sunspoke's width and depth, with a playable second-floor gallery, internal stairs, external ramps, an open atrium, gardens and guard houses.
+- Every arena has green jump pads and four collectible abilities. Walk over a pickup to activate it for 20 seconds; it reappears after 24 seconds. Speed increases movement by 45%; spray fires faster with tighter spread; jump boost increases jump height; aim assist gently follows nearby visible targets while aiming down sights.
+- Rifle damage is 18, shotgun damage is 9 per pellet, pistol damage is 24, and sniper damage remains 84. Bots react more slowly, aim less accurately and deal less damage at every difficulty.
+- Weapon swaps lower and raise the gun smoothly. Aiming, recoil, camera movement and character movement use smooth transitions, with updated armour and visor details.
+- On each map change, players respawn with fresh equipment and abilities reset. Scores remain. Offline pauses stop the clock; online rooms continue until everyone leaves.
 
 ## Start playing on your computer
 
@@ -14,6 +22,7 @@ Fight for control of Sunspoke Depot in a five-minute rooftop deathmatch. Play ag
 | Action | Input |
 | --- | --- |
 | Move, sprint, jump | **W A S D**, hold **Shift**, **Space** |
+| Slide while moving | **C** |
 | Look, fire, aim down sights | Move the mouse, **left-click**, hold **right-click** |
 | Reload | **R** |
 | Equip assault rifle, shotgun, sniper rifle, pistol | **1**, **2**, **3**, **4** respectively |
@@ -28,7 +37,7 @@ Everyone opens the same game URL and enters a nickname in multiplayer. A room co
 
 - **Quick Match** finds a public room or creates one. To play with specific friends, choose **Create Room**, make it private and share its code. Friends enter it under **Join Room**.
 - The lobby shows participants and their ready state. The host can fill empty slots with labelled bots. For an all-human match, leave bot fill off and invite at least two people in total. Rooms hold up to eight combatants.
-- Each player marks themselves ready. The host starts the round. Players respawn after eliminations. Hold Tab to follow the standings until the shared timer ends and final scores appear.
+- Each player marks themselves ready. The host starts the session. Players respawn after eliminations. Hold Tab to follow the standings; the shared timer counts down to the next map.
 
 **On the same Wi-Fi**, run the server on one computer. Find its local IPv4 address with `ipconfig` on Windows. Other players open that address with port 3000, for example `http://192.168.1.23:3000`. Use your host's actual address. If a firewall prompts on the host, allow Node on your private network. For friends outside your network, publish the server below.
 
@@ -70,7 +79,7 @@ Active rooms and scores live in one server process. A restart or deployment clos
 ## Check a multiplayer deployment
 
 1. Open the deployed game in Chrome and Edge, or use two separate browser profiles. Use different nicknames. Create a private room in one and join by code in the other. Check both names in the lobby.
-2. Ready both players and start as host. Have one player move, jump and shoot while the other watches. Check hit markers, health, the kill feed, respawning, connection status and ping. Compare both scoreboards and the final results after five minutes.
+2. Ready both players and start as host. Have one player move, jump and shoot while the other watches. Check hit markers, health, the kill feed, respawning, connection status and ping. Collect an ability and use a jump pad. After five minutes, check that both players enter the next map together and retain their scores.
 3. Try a public room with Quick Match. Enable bot fill as host and check the bot labels. Leave from one browser and check that the other can continue.
 
 If a friend cannot join, compare the **server address and room code** on both browsers. Check `/healthz` on the backend. In browser developer tools, the Network panel's WebSocket filter should show a successful `/ws` upgrade with status **101**. If an embedded website preview blocks mouse capture, open the game URL in its own browser tab.

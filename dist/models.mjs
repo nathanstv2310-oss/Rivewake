@@ -1,11 +1,12 @@
 import * as THREE from './vendor/three.module.js';
+import { spring,weaponTransition } from './animation.mjs';
 
 // Original hard-surface meshes. Bake the coloured panels of each moving part
 // into one geometry so a row of armoured fighters stays inexpensive to draw.
 const finish = new THREE.MeshStandardMaterial({
   vertexColors: true,
-  roughness: 0.78,
-  metalness: 0.12
+  roughness: 0.58,
+  metalness: 0.22
 });
 const carbon = 0x25323c;
 const recess = 0x152029;
@@ -17,7 +18,7 @@ const teal = 0x36bcb3;
 const coral = 0xf07a5e;
 const signal = 0x9bf8df;
 const boxTemplate = new THREE.BoxGeometry(1, 1, 1);
-const octagon = new THREE.CylinderGeometry(1, 1, 1, 8, 1, false);
+const octagon = new THREE.CylinderGeometry(1, 1, 1, 16, 1, false);
 const paintCache = new Map();
 const vertex = new THREE.Vector3();
 const transform = new THREE.Object3D();
@@ -390,6 +391,8 @@ function torsoGeometry(color) {
     part.box(side * 0.221, 0.094, 0.021, 0.012, 0.028, 0.075, color);
     part.panel(side * 0.170, 0.436, -0.119, 0.050, 0.114, 0.041, darkCloth, 0.012);
   }
+  part.panel(-.17,.443,-.15,.047,.055,.025,signal,.009);
+  part.panel(.17,.443,-.15,.047,.055,.025,signal,.009);
   // A low-profile field pack makes the silhouette readable from behind.
   part.panel(0, 0.325, 0.162, 0.345, 0.362, 0.122, carbon, 0.032);
   part.panel(0, 0.337, 0.226, 0.261, 0.255, 0.041, color, 0.024);
@@ -409,7 +412,8 @@ function headGeometry(color) {
     [0.410, 0.269, 0.228, 0.047, 0.012]
   ], [carbon, color, recess, ivory, color, color], color);
   part.panel(0, 0.241, -0.164, 0.258, 0.034, 0.039, carbon, 0.012);
-  part.box(0, 0.192, -0.159, 0.225, 0.019, 0.009, 0x70dedd);
+  part.panel(0, .190, -.164, .245, .067, .026, 0x315965, .011);
+  part.box(0, 0.192, -0.181, 0.225, 0.019, 0.009, 0x70dedd);
   part.box(-0.053, 0.197, -0.165, 0.103, 0.007, 0.006, 0xd3ffed);
   part.box(0, 0.412, 0.018, 0.043, 0.006, 0.174, ivory);
   part.box(0.043, 0.412, 0.018, 0.013, 0.006, 0.174, ivory);
@@ -495,7 +499,7 @@ export function makeFighter(paletteIndex = 0) {
   const palette = Number.isFinite(paletteIndex) ? Math.abs(Math.trunc(paletteIndex)) % suitColors.length : 0;
   const parts = fighterGeometry(palette);
   const fighter = new THREE.Group();
-  fighter.name = 'Depot operator';
+  fighter.name = 'Rivet operator';
   const hips = new THREE.Group();
   hips.position.y = 0.764;
   fighter.add(hips);
@@ -525,13 +529,14 @@ export function makeFighter(paletteIndex = 0) {
   aim.add(arms, gun);
   torso.add(aim);
   fighter.userData.gun = gun;
-  fighter.userData.rig = {parts, hips, torso, head, legs, aim, arms, gun, weapon: 0};
+  fighter.userData.rig = {parts, hips, torso, head, legs, aim, arms, gun, weapon: 0,animation:{}};
   return fighter;
 }
 
-export function poseFighter(fighter, {stride = 0, moving = 0, pitch = 0, weapon = 0, recoil = 0, crouch = 0} = {}) {
+export function poseFighter(fighter, {stride = 0, moving = 0, pitch = 0, weapon = 0, recoil = 0, crouch = 0, dt = 1/60, air = 0, time = 0} = {}) {
   const rig = fighter.userData.rig;
-  const index = gunIndex(weapon);
+  const swap=weaponTransition(rig.animation,gunIndex(weapon),dt);
+  const index = rig.animation.displaySlot;
   if (index !== rig.weapon) {
     rig.weapon = index;
     rig.gun.name = gunNames[index];
@@ -544,17 +549,20 @@ export function poseFighter(fighter, {stride = 0, moving = 0, pitch = 0, weapon 
   const pace = THREE.MathUtils.clamp(moving, 0, 1);
   const low = THREE.MathUtils.clamp(crouch, 0, 1);
   const kick = THREE.MathUtils.clamp(recoil, 0, 1);
-  const swing = Math.sin(stride) * pace * (1-low);
-  rig.hips.position.y = 0.764 - low * 0.30 + Math.abs(swing) * 0.013;
-  rig.torso.rotation.x = -low * .21;
+  const airborne=spring(rig.animation,'air',air,14,dt);
+  const swing = Math.sin(stride) * pace * (1-low)*(1-airborne*.8);
+  const breath=Math.sin(time*2)*.003*(1-pace);
+  rig.hips.position.y = 0.764 - low * 0.30 + Math.abs(swing) * 0.018+breath;
+  rig.torso.rotation.x = -low * .21-airborne*.09;
   rig.torso.rotation.y = swing * .052 + low * .17;
   rig.torso.rotation.z = swing * .022 + low * .16;
   for (let i = 0; i < 2; i++) {
     const step = i === 0 ? swing : -swing;
-    rig.legs[i].upper.rotation.x = step * 0.59 + low * (i===0?1.1:.74);
-    rig.legs[i].lower.rotation.x = -Math.max(0, -step) * 0.72 - low * (i===0?.40:1.85);
+    rig.legs[i].upper.rotation.x = step * 0.59 + low * (i===0?1.1:.74)+airborne*(i===0?.25:-.18);
+    rig.legs[i].lower.rotation.x = -Math.max(0, -step) * 0.72 - low * (i===0?.40:1.85)-airborne*.42;
   }
-  rig.aim.rotation.x = THREE.MathUtils.clamp(pitch, -1.45, 1.45) + kick * 0.095;
+  rig.aim.rotation.x = THREE.MathUtils.clamp(pitch, -1.45, 1.45) + kick * 0.095-swap*.65;
   rig.aim.position.z = -0.022 + kick * 0.050;
+  rig.head.rotation.z = swing*.016;
   rig.head.rotation.x = THREE.MathUtils.clamp(pitch * 0.74, -0.92, 0.92);
 }

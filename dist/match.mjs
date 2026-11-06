@@ -1,21 +1,21 @@
-import { ARENA } from './arena.mjs';
+import { arenaFor,mapAt,ROTATION_SECONDS,ROTATION } from './maps.mjs';
+import { ABILITIES,PICKUP_RESPAWN,hasAbility } from './abilities.mjs';
 import { STEP, MATCH_SECONDS, WEAPONS, EYE, clamp, lerp, angleDelta, emptyInput, movePlayer, wallDistance, fighterHit, sight } from './rules.mjs';
 
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
-const graph = ARENA.nodes.map(()=>[]);
-for(const [a,b] of ARENA.edges) { graph[a].push(b); graph[b].push(a); }
 function nearestNode(p) {
   let best=0, cost=Infinity;
-  ARENA.nodes.forEach((n,i)=>{ const d=(p.x-n.x)**2+(p.z-n.z)**2+5*(p.y-n.y)**2; if(d<cost){cost=d;best=i;} });
+  arenaFor(p.mapId).nodes.forEach((n,i)=>{ const d=(p.x-n.x)**2+(p.z-n.z)**2+5*(p.y-n.y)**2; if(d<cost){cost=d;best=i;} });
   return best;
 }
-function route(start, goal) {
+function route(start, goal, arena) {
+  const graph=arena.graph;
   const queue=[start], parent=new Map([[start,-1]]);
   for(let i=0;i<queue.length && !parent.has(goal);i++) {
     for(const next of graph[queue[i]]) if(!parent.has(next)){ parent.set(next,queue[i]); queue.push(next); }
   }
   const path=[];
-  if(parent.has(goal)) for(let n=goal;n!==-1;n=parent.get(n)) path.push(ARENA.nodes[n]);
+  if(parent.has(goal)) for(let n=goal;n!==-1;n=parent.get(n)) path.push(arena.nodes[n]);
   return path.reverse();
 }
 
@@ -23,21 +23,21 @@ function botInput(world,p) {
   const ai=p.brain, now=world.time, level=world.difficulty;
   const input=emptyInput(p);
   if(now>=ai.think) {
-    ai.think=now+.13+Math.random()*.12;
+    ai.think=now+.24+Math.random()*.18;
     let best=Infinity, target=null;
     for(const foe of world.players.values()) {
       if(foe===p || foe.hp<=0 || foe.shieldUntil>now) continue;
       const d=distance(p,foe);
       if(d<best && d<55 && sight(p,foe)){target=foe;best=d;}
     }
-    if(target?.id!==ai.target) ai.trigger=now+[.78,.45,.25][level];
+    if(target?.id!==ai.target) ai.trigger=now+[1.2,.85,.55][level];
     ai.target=target?.id;
-    ai.error=(Math.random()-.5)*[.135,.057,.026][level];
-    ai.lift=(Math.random()-.52)*[.11,.052,.027][level];
+    ai.error=(Math.random()-.5)*[.23,.14,.085][level];
+    ai.lift=(Math.random()-.52)*[.18,.12,.075][level];
     if(!target && (!ai.path?.length || now>=ai.repath)) {
       const foes=[...world.players.values()].filter(q=>q!==p && q.hp>0).sort((a,b)=>distance(p,a)-distance(p,b));
-      const dest=foes.length && Math.random()<.84 ? nearestNode(foes[0]) : Math.floor(Math.random()*graph.length);
-      ai.path=route(nearestNode(p),dest); ai.repath=now+2.3+Math.random();
+      const dest=foes.length && Math.random()<.84 ? nearestNode(foes[0]) : Math.floor(Math.random()*world.arena.nodes.length);
+      ai.path=route(nearestNode(p),dest,world.arena); ai.repath=now+2.3+Math.random();
     }
   }
   const enemy=world.players.get(ai.target);
@@ -45,14 +45,14 @@ function botInput(world,p) {
     const dx=enemy.x-p.x, dz=enemy.z-p.z, range=Math.hypot(dx,dz);
     const yaw=Math.atan2(-dx,-dz)+ai.error;
     const pitch=Math.atan2(enemy.y+1.19-p.y-EYE,Math.max(.1,range))+ai.lift;
-    input.yaw=p.yaw+clamp(angleDelta(p.yaw,yaw),-.18,.18);
-    input.pitch=lerp(p.pitch,pitch,.27);
+    input.yaw=p.yaw+clamp(angleDelta(p.yaw,yaw),-.105,.105);
+    input.pitch=lerp(p.pitch,pitch,.16);
     const desired=[13,6.5,20,11][p.weapon];
     input.f=range>desired? .86 : range<desired*.48? -.48 : .08;
     input.s=.6*Math.sin(now*1.7+ai.phase);
     input.ads=range>12 && p.weapon!==1;
     input.fire=now>ai.trigger && Math.abs(angleDelta(input.yaw,yaw))<.13 && Math.abs(input.pitch-pitch)<.105;
-    if(p.weapon===0 && (now+ai.phase)%[1.3,1.05,.9][level] < [.6,.35,.17][level]) input.fire=false;
+    if(p.weapon===0 && (now+ai.phase)%[1.7,1.45,1.2][level] < [.95,.72,.48][level]) input.fire=false;
     ai.path=[];
   } else {
     while(ai.path?.length && distance(p,ai.path[0])<.68) ai.path.shift();
@@ -72,7 +72,8 @@ function botInput(world,p) {
 }
 
 export class Match {
-  constructor(difficulty=1) {
+  constructor(difficulty=1,startMap=mapAt(0)) {
+    this.mapId=startMap;this.arena=arenaFor(startMap);this.rotates=true;this.rotationStart=Math.max(0,ROTATION.indexOf(startMap));this.pickupReady={};
     this.players=new Map(); this.time=0; this.finished=false; this.events=[]; this.history=[];
     this.difficulty=clamp(difficulty|0,0,2); this.eventId=0;
   }
@@ -83,13 +84,13 @@ export class Match {
   }
   spawn(p) {
     let index=0, best=-Infinity;
-    ARENA.spawns.forEach((s,i)=>{
+    this.arena.spawns.forEach((s,i)=>{
       let nearest=70;
       for(const q of this.players.values()) if(q!==p && q.hp>0) nearest=Math.min(nearest,distance(s,q));
       const weight=nearest+Math.random()*8-(i===p.lastSpawn?12:0);
       if(weight>best){best=weight;index=i;}
     });
-    Object.assign(p,ARENA.spawns[index],{hp:100,life:p.life+1,lastSpawn:index,pitch:0,vx:0,vy:0,vz:0,grounded:true,slideLatch:false,slideLeft:0,slideCooldown:0,slideX:0,slideZ:0,jumpLatch:false,
+    Object.assign(p,this.arena.spawns[index],{mapId:this.mapId,effects:{},padCooldown:0,padLaunch:0,hp:100,life:p.life+1,lastSpawn:index,pitch:0,vx:0,vy:0,vz:0,grounded:true,slideLatch:false,slideLeft:0,slideCooldown:0,slideX:0,slideZ:0,jumpLatch:false,
       weapon:p.bot ? (p.color+1)%4 : p.weapon??0, ammo:WEAPONS.map(w=>w.mag),reserve:WEAPONS.map(w=>w.reserve),
       reloadTo:0,nextShot:this.time+.23,bloom:0,ads:false,sprinting:false,respawnAt:0,shieldUntil:this.time+1.15,
       brain:{think:0,trigger:this.time+.8,phase:Math.random()*12,path:[],repath:0}});
@@ -113,10 +114,10 @@ export class Match {
   fire(p,rewind) {
     const w=WEAPONS[p.weapon], now=this.time;
     if(now+.0001<p.nextShot || p.reloadTo || !p.ammo[p.weapon]) return;
-    p.ammo[p.weapon]--; p.nextShot=Math.max(now-STEP*.5,p.nextShot)+w.delay;
+    p.ammo[p.weapon]--; p.nextShot=Math.max(now-STEP*.5,p.nextShot)+w.delay*(hasAbility(p,'spray')?.65:1);
     p.shieldUntil=0;
     const o={x:p.x,y:p.y+EYE-(p.slideLeft>0?.32:0),z:p.z};
-    const spread=w.spread*(p.ads?w.aim:1)*(p.grounded?1:2.4)*(1+Math.hypot(p.vx,p.vz)*.055)+p.bloom;
+    const spread=(hasAbility(p,'spray')?.78:1)*w.spread*(p.ads?w.aim:1)*(p.grounded?1:2.4)*(1+Math.hypot(p.vx,p.vz)*.055)+p.bloom;
     p.bloom=Math.min(.032,p.bloom+w.kick*(p.ads?.1:.21));
     const candidates=[];
     for(const foe of this.players.values()) {
@@ -128,7 +129,7 @@ export class Match {
       const r=Math.sqrt(Math.random())*spread, a=Math.random()*2*Math.PI;
       const yaw=p.yaw+Math.cos(a)*r, pitch=p.pitch+Math.sin(a)*r;
       const d={x:-Math.sin(yaw)*Math.cos(pitch),y:Math.sin(pitch),z:-Math.cos(yaw)*Math.cos(pitch)};
-      let end=wallDistance(o,d,w.range), target, head=false;
+      let end=wallDistance(o,d,w.range,this.mapId), target, head=false;
       for(const {foe,pose} of candidates) {
         const hit=fighterHit(o,d,pose,end);
         if(hit && hit.t<end){end=hit.t;target=foe;head=hit.head;}
@@ -137,7 +138,7 @@ export class Match {
       if(target) {
         const h=hits.get(target)||{damage:0,head:false};
         const falloff=p.weapon===1?clamp(1-(end-8)*.027,.46,1):1;
-        h.damage+=Math.round(w.damage*(head?w.head:1)*falloff); h.head ||= head; hits.set(target,h);
+        h.damage+=Math.round(w.damage*(head?w.head:1)*falloff*(p.bot?[.42,.5,.6][this.difficulty]:1)); h.head ||= head; hits.set(target,h);
       }
     }
     this.event('shot',{who:p.id,weapon:p.weapon,origin:[o.x,o.y,o.z],ends});
@@ -154,12 +155,20 @@ export class Match {
   tick(inputs=new Map(), rewindById=new Map()) {
     if(this.finished) return;
     this.time+=STEP;
-    if(this.time>=MATCH_SECONDS-1e-7) {this.time=MATCH_SECONDS;this.finished=true;return;}
+    if(!this.rotates && this.time>=MATCH_SECONDS-1e-7) {this.time=MATCH_SECONDS;this.finished=true;return;}
+    const nextMap=ROTATION[(this.rotationStart+Math.floor((this.time+1e-7)/ROTATION_SECONDS))%ROTATION.length];
+    if(this.rotates && this.mapId!==nextMap){
+      this.mapId=nextMap;this.arena=arenaFor(nextMap);
+      this.history=[];this.events=[];this.pickupReady={};
+      for(const p of this.players.values())p.hp=0;
+      for(const p of this.players.values())this.spawn(p);
+      return;
+    }
     const actions=[];
     for(const p of this.players.values()) {
       if(p.hp<=0) { if(this.time>=p.respawnAt) this.spawn(p); continue; }
       const i=p.bot?botInput(this,p):(inputs.get(p.id) || emptyInput(p));
-      if(p.weapon!==i.slot) {p.weapon=i.slot;p.reloadTo=0;p.nextShot=Math.max(p.nextShot,this.time+.18);p.bloom=0;}
+      if(p.weapon!==i.slot) {p.weapon=i.slot;p.reloadTo=0;p.nextShot=Math.max(p.nextShot,this.time+.35);p.bloom=0;}
       p.bloom=Math.max(0,p.bloom-STEP*.039);
       if(p.reloadTo && this.time>=p.reloadTo) {
         const n=Math.min(WEAPONS[p.weapon].mag-p.ammo[p.weapon],p.reserve[p.weapon]);
@@ -168,7 +177,15 @@ export class Match {
       if((i.reload || (i.fire && !p.ammo[p.weapon])) && !p.reloadTo && p.ammo[p.weapon]<WEAPONS[p.weapon].mag && p.reserve[p.weapon]>0) {
         p.reloadTo=this.time+WEAPONS[p.weapon].reload;this.event('reload',{who:p.id,weapon:p.weapon});
       }
+      const previousLaunch=p.padLaunch;
       movePlayer(p,i);
+      if(p.padLaunch!==previousLaunch)this.event('launch',{who:p.id});
+      for(const pickup of this.arena.pickups){
+        if((this.pickupReady[pickup.id]||0)>this.time || Math.abs(p.y-pickup.y)>.9 || Math.hypot(p.x-pickup.x,p.z-pickup.z)>1.15)continue;
+        p.effects[pickup.type]=ABILITIES[pickup.type].duration;
+        this.pickupReady[pickup.id]=this.time+PICKUP_RESPAWN;
+        this.event('pickup',{who:p.id,ability:pickup.type});
+      }
       if(i.fire && !p.sprinting) actions.push(p);
     }
     for(const p of actions) if(p.hp>0) this.fire(p,rewindById.get(p.id)||0);
@@ -180,10 +197,11 @@ export class Match {
     const players=[];
     for(const p of this.players.values()) {
       const {id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,slideLatch,slideLeft,slideCooldown,slideX,slideZ,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil}=p;
-      const out={id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,slideLatch,slideLeft,slideCooldown,slideX,slideZ,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil,mag:p.ammo[weapon],reserve:p.reserve[weapon]};
+      const out={mapId:this.mapId,effects:{...p.effects},padCooldown:p.padCooldown,padLaunch:p.padLaunch,id,name,bot,color,hp,weapon,kills,deaths,score,life,grounded,slideLatch,slideLeft,slideCooldown,slideX,slideZ,jumpLatch,sprinting,ads,ack,respawnAt,reloadTo,shieldUntil,mag:p.ammo[weapon],reserve:p.reserve[weapon]};
       for(const key of ['x','y','z','vx','vy','vz','yaw','pitch']) out[key]=+p[key].toFixed(4);
       players.push(out);
     }
-    return {time:this.time,remaining:Math.max(0,MATCH_SECONDS-this.time),finished:this.finished,players};
+    const round=Math.floor((this.time+1e-7)/ROTATION_SECONDS),nextMapAt=(round+1)*ROTATION_SECONDS;
+    return {mapId:this.mapId,nextMapId:ROTATION[(this.rotationStart+round+1)%ROTATION.length],nextMapAt,round:round+1,pickups:this.arena.pickups.map(p=>({...p,readyAt:this.pickupReady[p.id]||0})),time:this.time,remaining:this.rotates?nextMapAt-this.time:Math.max(0,MATCH_SECONDS-this.time),finished:this.finished,players};
   }
 }
